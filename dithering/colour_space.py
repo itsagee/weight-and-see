@@ -12,12 +12,41 @@ which means we can safely avoid any extra conversion steps and potential loss of
 """
 
 # this function is used to convert colours from the RGB to the CIELAB colour space
-def rgb_to_cielab(rgb: np.ndarray) -> np.ndarray:
+def rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
     # skimage expects shape (1, 1, 3) for a single pixel
-    cielab = color.rgb2lab(rgb.reshape(1, 1, 3)).reshape(3)
-    return cielab
+    lab = color.rgb2lab(rgb.reshape(1, 1, 3)).reshape(3)
+    return lab
 
 # this function is used to convert colours from the CIELAB to the RGB colour space
-def cielab_to_rgb(lab: np.ndarray) -> np.ndarray:
+def lab_to_rgb(lab: np.ndarray) -> np.ndarray:
     rgb = color.lab2rgb(lab.reshape(1, 1, 3)).reshape(3)
+    return rgb
+
+# this function is used to convert colours from RGB to CIExyY
+def rgb_to_xyY(rgb: np.ndarray) -> np.ndarray: 
+    # RGB → XYZ
+    xyz = color.rgb2xyz(rgb.reshape(1, 1, 3)).reshape(3)
+
+    # XYZ → xyY
+    X, Y, Z = xyz
+    denom = X + Y + Z + 1e-8  # avoid division by zero
+    x = X / denom
+    y = Y / denom
+    
+    # Y stays as Y (luminance)
+    xyY = np.array([x, y, Y])
+    
+    return xyY
+
+# this function is used to convert colours from CIExyY to RGB
+def xyY_to_rgb(xyY: np.ndarray) -> np.ndarray:
+    # xyY → XYZ
+    x, y, Y = xyY
+    X = (Y / (y + 1e-8)) * x
+    Z = (Y / (y + 1e-8)) * (1 - x - y)
+    xyz = np.array([X, Y, Z])
+
+    # XYZ → RGB
+    rgb = color.xyz2rgb(xyz.reshape(1, 1, 3)).reshape(3)
+    
     return rgb

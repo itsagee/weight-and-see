@@ -54,7 +54,8 @@ def load_image(image_path: str) -> np.ndarray:
 # this function reconstructs the image from the weights and palette using additive blending (the weighted sum of palette colours) in RGBXY, from the RGBXY paper
 def reconstruct_additive(weights: np.ndarray, palette: np.ndarray) -> np.ndarray:
     # for each pixel (h, w), multiply each palette colour (c, d) by its weight (c, ) and add them all together.
-    reconstruction = np.einsum('hwc,cd->hwd', weights, palette)
+    # hwc: weights, cd: palette, hwd: the output
+    reconstruction = np.einsum('hwc, cd -> hwd', weights, palette)
     # this is the big version, the upper line is a short version of the same nested matrix operation
     # reconstruction = np.zeros((height, width, 3))
     # for h in range(height):
