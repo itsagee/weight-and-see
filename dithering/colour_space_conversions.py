@@ -50,3 +50,25 @@ def xyY_to_rgb(xyY: np.ndarray) -> np.ndarray:
     rgb = color.xyz2rgb(xyz.reshape(1, 1, 3)).reshape(3)
     
     return rgb
+
+# this function is used to convert colours from the RGB to the working colour space (either RGB or CIELAB) depending on the user's choice
+def to_working_space(rgb: np.ndarray, colour_space: str) -> np.ndarray:
+    if colour_space == 'rgb':
+        return rgb
+    elif colour_space == 'cielab':
+        return rgb_to_lab(rgb)
+    elif colour_space == 'ciexyy':
+        return rgb_to_xyY(rgb)
+    else:
+        raise ValueError(f"Unknown colour space: {colour_space}")
+
+# this function is used to convert colours from the working colour space (either RGB or CIELAB) to RGB depending on the user's choice
+def to_rgb(pixel: np.ndarray, colour_space: str) -> np.ndarray:
+    if colour_space == 'rgb':
+        return pixel
+    elif colour_space == 'cielab':
+        return lab_to_rgb(pixel)
+    elif colour_space == 'ciexyy':
+        return xyY_to_rgb(pixel)
+    else:
+        raise ValueError(f"Unknown colour space: {colour_space}")

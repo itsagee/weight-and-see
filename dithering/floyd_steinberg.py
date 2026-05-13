@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image
+from . import colour_space_conversions as cs
 
 # === Starting with grayscale version & helper function ===
 
@@ -39,13 +40,30 @@ def floyd_steinberg_grayscale(gray: np.ndarray) -> np.ndarray:
 
 # helper function to find the nearest palette colour for a given pixel
 def find_nearest_colour(pixel: np.ndarray, palette: np.ndarray) -> int:
-    # first we need to compute the distances to all palette colours
+    # now we can compute the distances to all palette colours in the same way across all colour spaces
     distances = np.linalg.norm(palette - pixel, axis=1)
-    # so we can return the index of nearest colour
+    # and now we can return the index of nearest colour
     return np.argmin(distances)
 
+# helper function to initialise buffer, palette & result vairables in the correct working space
+def init_buffers(image: np.ndarray, palette: np.ndarray, colour_space: str) -> tuple:
+    height, width, _ = image.shape
+    
+    # first we need to convert image to our working colour space
+    pixels = image.reshape(-1, 3)
+    pixels_ws = np.array([cs.to_working_space(p, colour_space) for p in pixels])
+    buffer = pixels_ws.reshape(height, width, 3).copy()
+    
+    # convert palette to working colour space
+    palette_ws = np.array([cs.to_working_space(c, colour_space) for c in palette])
+    
+    # result should always start as zeros in RGB
+    result = np.zeros((height, width, 3), dtype=np.float64)
+    
+    return buffer, palette_ws, result, height, width
+
 # helper function to diffuse the error to the 4 unprocessed neighbours using the FS kernel
-def diffuse_error(buffer: np.ndarray, error: float, y: int, x: int, height: int, width: int):
+def diffuse_error(buffer: np.ndarray, error: np.ndarray, y: int, x: int, height: int, width: int) -> None:
     if x + 1 < width:
         buffer[y, x + 1] += error * (7 / 16)
     if y + 1 < height:
@@ -56,30 +74,34 @@ def diffuse_error(buffer: np.ndarray, error: float, y: int, x: int, height: int,
             buffer[y + 1, x + 1] += error * (1 / 16)
             
 # function for Floyd-Steinberg dithering on a coloured image with nearest palette colours
-def floyd_steinberg_nearest(image: np.ndarray, palette: np.ndarray) -> np.ndarray:
-    height, width, _ = image.shape
-    buffer = image.astype(np.float64).copy()
-    result = np.zeros((height, width, 3), dtype=np.float64)
+# HERE we are picking palette colour closest in colour space (don't care about weights)
+def floyd_steinberg_nearest(image: np.ndarray, palette: np.ndarray, colour_space: str = 'rgb'):
     
-    # now to process the image pixel by pixel
+    # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
+    buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
+    
+    # now we can safely move on to processing the image pixel by pixel
     for y in range(height):
         for x in range(width):
             # we first need to find the nearest palette colour for current pixel
-            nearest_idx = find_nearest_colour(buffer[y, x], palette)
-            nearest_colour = palette[nearest_idx]
-            result[y, x] = nearest_colour
+            nearest_idx = find_nearest_colour(buffer[y, x], palette_ws)
+            chosen_colour_ws = palette_ws[nearest_idx]
+            
+            # convert back to RGB and store result
+            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
             
             # then compute the error and diffuse it
-            error = buffer[y, x] - nearest_colour
+            error = buffer[y, x] - chosen_colour_ws
             diffuse_error(buffer, error, y, x, height, width)
     
     return result
 
-# function for Floy-Steinberg dithering on a coloured image with RGBXY mixing weights
-def floyd_steinberg_weight_driven(image: np.ndarray, palette: np.ndarray, weights: np.ndarray) -> np.ndarray:
-    height, width, _ = image.shape
-    buffer = image.astype(np.float64).copy()
-    result = np.zeros((height, width, 3), dtype=np.float64)
+# function for Floyd-Steinberg dithering on a coloured image with RGBXY mixing weights
+# HERE we are picking palette colour with the highest mixing weight at this pixel (don't care about distance in colour space)
+def floyd_steinberg_weight_driven(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb') -> np.ndarray:
+
+    # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
+    buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
     
     # again pixel by pixel
     for y in range(height):
@@ -87,33 +109,35 @@ def floyd_steinberg_weight_driven(image: np.ndarray, palette: np.ndarray, weight
             # this time we compute the mixed colour using the RGBXY weights (from .js file saved from RGBXY)
             # first we pick the palette colour with the highest weight at this pixel
             chosen_idx = np.argmax(weights[y, x])
-            chosen_colour = palette[chosen_idx]
-            result[y, x] = chosen_colour
-
+            chosen_colour_ws = palette_ws[chosen_idx]
+            
+            # convert back to RGB and store result
+            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
+            
             # then compute the error between buffer (not original) and chosen colour
-            error = buffer[y, x] - chosen_colour
+            error = buffer[y, x] - chosen_colour_ws
             diffuse_error(buffer, error, y, x, height, width)
     
     return result
 
 # function for Floyd-Steinberg dithering on a coloured image with RGBXY mixing weights BUT combining buffer distance and RGBXY weights via alpha
-def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, alpha: float = 0.5,) -> np.ndarray:
+# HERE we are picking palette colour with the best combined score of distance in colour space and RGBXY weight at this pixel
+def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb', alpha: float = 0.5,) -> np.ndarray:
     """
     As a small note on the alpha: it controls the balance between distance-based and weight-based decisions as follows
     alpha = 0.0 for pure nearest-colour (same as floyd_steinberg_nearest)
     alpha = 1.0 for pure weight-driven  (same as floyd_steinberg_weight_driven)
     alpha = 0.5 for balanced combination (set as our default option)
     """
-    
-    height, width, _ = image.shape
-    buffer = image.astype(np.float64).copy()
-    result = np.zeros((height, width, 3), dtype=np.float64)
+       
+    # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
+    buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
 
     # as usual pixel by pixel
     for y in range(height):
         for x in range(width):
             # we compute the distances to all palette colours from the current buffer pixel
-            distances = np.linalg.norm(palette - buffer[y, x], axis=1)
+            distances = np.linalg.norm(palette_ws - buffer[y, x], axis=1)
 
             # we then normalise both signals to [0, 1] so they're comparable
             distances_norm = distances / (distances.max() + 1e-8)
@@ -122,11 +146,13 @@ def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, wei
             # for the combined score, we add the low distance with high weight to get the best candidate
             scores = (1 - alpha) * distances_norm + alpha * (1 - weights_norm)
             chosen_idx = np.argmin(scores)
-            chosen_colour = palette[chosen_idx]
-            result[y, x] = chosen_colour
+            chosen_colour_ws = palette_ws[chosen_idx]
+            
+            # convert back to RGB and store result
+            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
 
             # finally we compute the error and diffuse it as before
-            error = buffer[y, x] - chosen_colour
+            error = buffer[y, x] - chosen_colour_ws
             diffuse_error(buffer, error, y, x, height, width)
 
     return result
