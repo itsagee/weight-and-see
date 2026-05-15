@@ -5,6 +5,17 @@ from .dithering_utils import to_grayscale, find_nearest_colour, init_buffers
 
 # === Starting with grayscale version & helper function ===
 
+# helper function to diffuse the error to the 4 unprocessed neighbours using the FS kernel
+def diffuse_fs(buffer: np.ndarray, error: np.ndarray, y: int, x: int, height: int, width: int) -> None:
+    if x + 1 < width:
+        buffer[y, x + 1] += error * (7 / 16)
+    if y + 1 < height:
+        buffer[y + 1, x] += error * (5 / 16)
+        if x - 1 >= 0:
+            buffer[y + 1, x - 1] += error * (3 / 16)
+        if x + 1 < width:
+            buffer[y + 1, x + 1] += error * (1 / 16)
+            
 # function to perform the Floyd-Steinberg dithering algorithm on a grayscale image
 def floyd_steinberg_grayscale(gray: np.ndarray) -> np.ndarray:
     height, width = gray.shape
@@ -22,29 +33,11 @@ def floyd_steinberg_grayscale(gray: np.ndarray) -> np.ndarray:
             error = old_val - new_val
             
             # finally we spread the error to the 4 unprocessed neighbours
-            if x + 1 < width:
-                buffer[y, x + 1] += error * (7 / 16)
-            if y + 1 < height:
-                buffer[y + 1, x] += error * (5 / 16)
-                if x - 1 >= 0:
-                    buffer[y + 1, x - 1] += error * (3 / 16)
-                if x + 1 < width:
-                    buffer[y + 1, x + 1] += error * (1 / 16)
+            diffuse_fs(buffer, error, y, x, height, width)
     return result
 
 
 # === Now for the coloured version ===
-
-# helper function to diffuse the error to the 4 unprocessed neighbours using the FS kernel
-def diffuse_error(buffer: np.ndarray, error: np.ndarray, y: int, x: int, height: int, width: int) -> None:
-    if x + 1 < width:
-        buffer[y, x + 1] += error * (7 / 16)
-    if y + 1 < height:
-        buffer[y + 1, x] += error * (5 / 16)
-        if x - 1 >= 0:
-            buffer[y + 1, x - 1] += error * (3 / 16)
-        if x + 1 < width:
-            buffer[y + 1, x + 1] += error * (1 / 16)
             
 # function for Floyd-Steinberg dithering on a coloured image with nearest palette colours
 # HERE we are picking palette colour closest in colour space (don't care about weights)
@@ -65,7 +58,7 @@ def floyd_steinberg_nearest(image: np.ndarray, palette: np.ndarray, colour_space
             
             # then compute the error and diffuse it
             error = buffer[y, x] - chosen_colour_ws
-            diffuse_error(buffer, error, y, x, height, width)
+            diffuse_fs(buffer, error, y, x, height, width)
     
     return result
 
@@ -89,7 +82,7 @@ def floyd_steinberg_weight_driven(image: np.ndarray, palette: np.ndarray, weight
             
             # then compute the error between buffer (not original) and chosen colour
             error = buffer[y, x] - chosen_colour_ws
-            diffuse_error(buffer, error, y, x, height, width)
+            diffuse_fs(buffer, error, y, x, height, width)
     
     return result
 
@@ -126,6 +119,6 @@ def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, wei
 
             # finally we compute the error and diffuse it as before
             error = buffer[y, x] - chosen_colour_ws
-            diffuse_error(buffer, error, y, x, height, width)
+            diffuse_fs(buffer, error, y, x, height, width)
 
     return result
