@@ -5,7 +5,7 @@ from .dithering_utils import to_grayscale, find_nearest_colour, init_buffers
 
 # === Starting with grayscale version & helper function ===
 
-# helper function to diffuse the error to the 4 unprocessed neighbours using the FS kernel
+# helper function to diffuse the error to the 12 unprocessed neighbours using the JJN kernel
 def diffuse_jjn(buffer: np.ndarray, error: np.ndarray, y: int, x: int, height: int, width: int) -> None:
     
     # JJN kernel is bigger than FS, so we need additional checks to account for more neighbours and also be careful with edge pixels
@@ -60,7 +60,7 @@ def jarvis_judice_ninke_grayscale(gray: np.ndarray) -> np.ndarray:
 
 # === Now for the coloured version ===
             
-# function for Floyd-Steinberg dithering on a coloured image with nearest palette colours
+# function for Jarvis-Judice-Ninke dithering on a coloured image with nearest palette colours
 def jarvis_judice_ninke_nearest(image: np.ndarray, palette: np.ndarray, colour_space: str = 'rgb') -> np.ndarray:
     
     # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
@@ -73,16 +73,16 @@ def jarvis_judice_ninke_nearest(image: np.ndarray, palette: np.ndarray, colour_s
             nearest_idx = find_nearest_colour(buffer[y, x], palette_ws)
             chosen_colour_ws = palette_ws[nearest_idx]
             
-            # convert back to RGB and store result
-            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
-            
             # then compute the error and diffuse it
             error = buffer[y, x] - chosen_colour_ws
             diffuse_jjn(buffer, error, y, x, height, width)
+            
+            # finally convert back to RGB and store result 
+            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
     
     return result
 
-# function for Floyd-Steinberg dithering on a coloured image with RGBXY mixing weights
+# function for Jarvis-Judice-Ninke dithering on a coloured image with RGBXY mixing weights
 def jarvis_judice_ninke_weight_driven(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb') -> np.ndarray:
     
     # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
@@ -96,16 +96,16 @@ def jarvis_judice_ninke_weight_driven(image: np.ndarray, palette: np.ndarray, we
             chosen_idx = np.argmax(weights[y, x])
             chosen_colour_ws = palette_ws[chosen_idx]
             
-            # convert back to RGB and store result
-            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
-            
             # then compute the error between buffer (not original) and chosen colour
             error = buffer[y, x] - chosen_colour_ws
             diffuse_jjn(buffer, error, y, x, height, width)
+            
+            # finally convert back to RGB and store result 
+            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
     
     return result
     
-# function for Floyd-Steinberg dithering on a coloured image with RGBXY mixing weights BUT combining buffer distance and RGBXY weights via alpha
+# function for Jarvis-Judice-Ninke dithering on a coloured image with RGBXY mixing weights BUT combining buffer distance and RGBXY weights via alpha
 def jarvis_judice_ninke_weighted_nearest(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb', alpha: float = 0.5,) -> np.ndarray:
     """
     As a small note on the alpha: it controls the balance between distance-based and weight-based decisions as follows
@@ -132,11 +132,11 @@ def jarvis_judice_ninke_weighted_nearest(image: np.ndarray, palette: np.ndarray,
             chosen_idx = np.argmin(scores)
             chosen_colour_ws = palette_ws[chosen_idx]
             
-            # convert back to RGB and store result
-            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
-
             # finally we compute the error and diffuse it as before
             error = buffer[y, x] - chosen_colour_ws
             diffuse_jjn(buffer, error, y, x, height, width)
+            
+            # finally convert back to RGB and store result 
+            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
 
     return result

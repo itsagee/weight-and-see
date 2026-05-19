@@ -5,23 +5,44 @@ from .dithering_utils import to_grayscale, find_nearest_colour, init_buffers
 
 # === Starting with grayscale version & helper function ===
 
-# helper function to diffuse the error to the 4 unprocessed neighbours using the FS kernel
-def diffuse_fs(buffer: np.ndarray, error: np.ndarray, y: int, x: int, height: int, width: int) -> None:
-    if x + 1 < width:
-        buffer[y, x + 1] += error * (7 / 16)
+# helper function to diffuse the error to the 12 unprocessed neighbours using the Stucki kernel
+def diffuse_stucki(buffer: np.ndarray, error: np.ndarray, y: int, x: int, height: int, width: int) -> None:
+    
+    # Similar to JJN, the Stucki kernel is bigger than FS, so we need additional checks to account for more neighbours and also be careful with edge pixels
+    if x + 1 < width: 
+        buffer[y, x + 1] += error * (8 / 42)
+    if x + 2 < width:
+        buffer[y, x + 2] += error * (4 / 42)
+        
+    # next row
     if y + 1 < height:
-        buffer[y + 1, x] += error * (5 / 16)
+        if x - 2 >= 0:
+            buffer[y + 1, x - 2] += error * (2 / 42)
         if x - 1 >= 0:
-            buffer[y + 1, x - 1] += error * (3 / 16)
+            buffer[y + 1, x - 1] += error * (4 / 42)
+        buffer[y + 1, x] += error * (8 / 42)
         if x + 1 < width:
-            buffer[y + 1, x + 1] += error * (1 / 16)
-            
-# function to perform the Floyd-Steinberg dithering algorithm on a grayscale image
-def floyd_steinberg_grayscale(gray: np.ndarray) -> np.ndarray:
+            buffer[y + 1, x + 1] += error * (4 / 42)
+        if x + 2 < width:
+            buffer[y + 1, x + 2] += error * (2 / 42)
+    
+    # next next row
+    if y + 2 < height:
+        if x - 2 >= 0:
+            buffer[y + 2, x - 2] += error * (1 / 42)
+        if x - 1 >= 0:
+            buffer[y + 2, x - 1] += error * (2 / 42)
+        buffer[y + 2, x] += error * (4 / 42)
+        if x + 1 < width:
+            buffer[y + 2, x + 1] += error * (2 / 42)
+        if x + 2 < width:
+            buffer[y + 2, x + 2] += error * (1 / 42)
+
+# function to perform the Stucki dithering algorithm on a grayscale image
+def stucki_grayscale(gray: np.ndarray) -> np.ndarray:
     height, width = gray.shape
     buffer = gray.astype(np.float64).copy()
     result = np.zeros((height, width), dtype=np.float64)
-    
     # for all pixels from top-left to bottom-right
     for y in range(height):
         for x in range(width):
@@ -32,16 +53,16 @@ def floyd_steinberg_grayscale(gray: np.ndarray) -> np.ndarray:
             # error shows our decision
             error = old_val - new_val
             
-            # finally we spread the error to the 4 unprocessed neighbours
-            diffuse_fs(buffer, error, y, x, height, width)
+            # finally we spread the error to the rest of the unprocessed neighbours using the Stucki kernel
+            diffuse_stucki(buffer, error, y, x, height, width)
+                    
     return result
 
 
 # === Now for the coloured version ===
             
-# function for Floyd-Steinberg dithering on a coloured image with nearest palette colours
-# HERE we are picking palette colour closest in colour space (don't care about weights)
-def floyd_steinberg_nearest(image: np.ndarray, palette: np.ndarray, colour_space: str = 'rgb'):
+# function for Stucki dithering on a coloured image with nearest palette colours
+def stucki_nearest(image: np.ndarray, palette: np.ndarray, colour_space: str = 'rgb') -> np.ndarray:
     
     # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
     buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
@@ -52,20 +73,19 @@ def floyd_steinberg_nearest(image: np.ndarray, palette: np.ndarray, colour_space
             # we first need to find the nearest palette colour for current pixel
             nearest_idx = find_nearest_colour(buffer[y, x], palette_ws)
             chosen_colour_ws = palette_ws[nearest_idx]
-                        
+            
             # then compute the error and diffuse it
             error = buffer[y, x] - chosen_colour_ws
-            diffuse_fs(buffer, error, y, x, height, width)
+            diffuse_stucki(buffer, error, y, x, height, width)
             
             # finally convert back to RGB and store result 
             result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
-            
+    
     return result
 
-# function for Floyd-Steinberg dithering on a coloured image with RGBXY mixing weights
-# HERE we are picking palette colour with the highest mixing weight at this pixel (don't care about distance in colour space)
-def floyd_steinberg_weight_driven(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb') -> np.ndarray:
-
+# function for Stucki dithering on a coloured image with RGBXY mixing weights
+def stucki_weight_driven(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb') -> np.ndarray:
+    
     # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
     buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
     
@@ -76,19 +96,18 @@ def floyd_steinberg_weight_driven(image: np.ndarray, palette: np.ndarray, weight
             # first we pick the palette colour with the highest weight at this pixel
             chosen_idx = np.argmax(weights[y, x])
             chosen_colour_ws = palette_ws[chosen_idx]
-                        
+            
             # then compute the error between buffer (not original) and chosen colour
             error = buffer[y, x] - chosen_colour_ws
-            diffuse_fs(buffer, error, y, x, height, width)
+            diffuse_stucki(buffer, error, y, x, height, width)
             
             # finally convert back to RGB and store result 
             result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
     
     return result
-
-# function for Floyd-Steinberg dithering on a coloured image with RGBXY mixing weights BUT combining buffer distance and RGBXY weights via alpha
-# HERE we are picking palette colour with the best combined score of distance in colour space and RGBXY weight at this pixel
-def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb', alpha: float = 0.5,) -> np.ndarray:
+    
+# function for Stucki dithering on a coloured image with RGBXY mixing weights BUT combining buffer distance and RGBXY weights via alpha
+def stucki_weighted_nearest(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb', alpha: float = 0.5,) -> np.ndarray:
     """
     As a small note on the alpha: it controls the balance between distance-based and weight-based decisions as follows
     alpha = 0.0 for pure nearest-colour (same as floyd_steinberg_nearest)
@@ -98,7 +117,7 @@ def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, wei
        
     # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
     buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
-
+    
     # as usual pixel by pixel
     for y in range(height):
         for x in range(width):
@@ -113,10 +132,10 @@ def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, wei
             scores = (1 - alpha) * distances_norm + alpha * (1 - weights_norm)
             chosen_idx = np.argmin(scores)
             chosen_colour_ws = palette_ws[chosen_idx]
-
+            
             # finally we compute the error and diffuse it as before
             error = buffer[y, x] - chosen_colour_ws
-            diffuse_fs(buffer, error, y, x, height, width)
+            diffuse_stucki(buffer, error, y, x, height, width)
             
             # finally convert back to RGB and store result 
             result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
