@@ -72,3 +72,21 @@ def to_rgb(pixel: np.ndarray, colour_space: str) -> np.ndarray:
         return xyY_to_rgb(pixel)
     else:
         raise ValueError(f"Unknown colour space: {colour_space}")
+    
+def compute_distance(pixel: np.ndarray, palette: np.ndarray, colour_space: str) -> np.ndarray:
+    
+    if (colour_space == 'rgb') or (colour_space == 'cielab'):
+        # Euclidean in RGB, simple metric, but not perceptually uniform
+        # Euclidean in CIELAB = ΔE76, reasonable perceptual metric
+        return np.linalg.norm(palette - pixel, axis=1)
+
+    elif colour_space == 'ciexyy':
+        # weight luminance and chromaticity separately
+        # Y (luminance) is index 2, x and y are indices 0 and 1
+        chroma_diff = np.linalg.norm(palette[:, :2] - pixel[:2], axis=1)
+        luma_diff   = np.abs(palette[:, 2] - pixel[2])
+        # luminance contributes more to perceived difference
+        return 2.0 * luma_diff + chroma_diff
+
+    else:
+        raise ValueError(f"Unknown colour space: {colour_space}")

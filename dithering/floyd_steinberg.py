@@ -16,6 +16,11 @@ def diffuse_fs(buffer: np.ndarray, error: np.ndarray, y: int, x: int, height: in
         if x + 1 < width:
             buffer[y + 1, x + 1] += error * (1 / 16)
             
+# helper softmax function
+def softmax(x):
+    e = np.exp(x - x.max())
+    return e / e.sum()
+            
 # function to perform the Floyd-Steinberg dithering algorithm on a grayscale image
 def floyd_steinberg_grayscale(gray: np.ndarray) -> np.ndarray:
     height, width = gray.shape
@@ -50,7 +55,7 @@ def floyd_steinberg_nearest(image: np.ndarray, palette: np.ndarray, colour_space
     for y in range(height):
         for x in range(width):
             # we first need to find the nearest palette colour for current pixel
-            nearest_idx = find_nearest_colour(buffer[y, x], palette_ws)
+            nearest_idx = find_nearest_colour(buffer[y, x], palette_ws, colour_space)
             chosen_colour_ws = palette_ws[nearest_idx]
                         
             # then compute the error and diffuse it
@@ -121,4 +126,56 @@ def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, wei
             # finally convert back to RGB and store result 
             result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
 
+    return result
+
+def floyd_steinberg_softmax(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb', alpha: float = 0.5) -> np.ndarray:
+    # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
+    buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
+    
+    # as usual pixel by pixel
+    for y in range(height):
+        for x in range(width):
+            
+            # we compute the perceptual distances to all palette colours int the working colour space
+            distances = cs.compute_distance(buffer[y, x], palette_ws, colour_space)
+            
+            # high weight = high score, lower distance = high score (negate distances)
+            # convert both signals to probability distributions using the softmax function
+            weight_score = softmax(weights[y, x])
+            distance_score = softmax(-distances)
+            
+            # combined score: our goal is to maximise this in order to find the best palette colour
+            combined = (1 - alpha) * distance_score + alpha * weight_score
+            chosen_idx = np.argmax(combined)
+            chosen_colour_ws = palette_ws[chosen_idx]
+            
+            # finally we compute the error and diffuse it as before
+            error = buffer[y, x] - chosen_colour_ws
+            diffuse_fs(buffer, error, y, x, height, width)
+            
+            # finally convert back to RGB and store result 
+            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
+
+    return result
+
+
+def floyd_steinberg_error_scaled(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb') -> np.ndarray:
+    # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
+    buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
+    
+    # as usual pixel by pixel
+    for y in range(height):
+        for x in range(width):
+            
+            # we do the standard nearest-colour assignment in the working colour space
+            chosen_idx = find_nearest_colour(buffer[y, x], palette_ws, colour_space)
+            chosen_colour_ws = palette_ws[chosen_idx]
+            
+            # scale error by (1 - weight): high weight = pixel strongly belongs to this colour (small error diffused), low weight = more of an uncertain assignment (more error diffused)
+            error = (buffer[y, x] - chosen_colour_ws) * (1 - weights[y, x, chosen_idx])
+
+            # diffuse and store (same in both functions)
+            diffuse_fs(buffer, error, y, x, height, width)
+            result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)
+            
     return result

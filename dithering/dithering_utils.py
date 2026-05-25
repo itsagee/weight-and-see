@@ -11,9 +11,9 @@ def to_grayscale(image: np.ndarray) -> np.ndarray:
 # === Coloured Helpers ===
 
 # helper function to find the nearest palette colour for a given pixel
-def find_nearest_colour(pixel: np.ndarray, palette: np.ndarray) -> int:
+def find_nearest_colour(pixel: np.ndarray, palette: np.ndarray, colour_space: str = 'rgb') -> int:
     # now we can compute the distances to all palette colours in the same way across all colour spaces
-    distances = np.linalg.norm(palette - pixel, axis=1)
+    distances = cs.compute_distance(pixel, palette, colour_space)
     # and now we can return the index of nearest colour
     return np.argmin(distances)
 
