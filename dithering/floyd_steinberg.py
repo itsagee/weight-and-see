@@ -128,7 +128,19 @@ def floyd_steinberg_weighted_nearest(image: np.ndarray, palette: np.ndarray, wei
 
     return result
 
+# function for Floyd-Steinberg dithering on a coloured image with RGBXY mixing weights BUT combining buffer distance and RGBXY weights via softmax
+# HERE both distance to palette colours AND RGBXY mixing are converted to probability distributions witht he softmax, then combined using alpha before picking the best colour
 def floyd_steinberg_softmax(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb', alpha: float = 0.5) -> np.ndarray:
+    """
+    As a small note on the alpha: it controls the balance between distance-based and weight-based decisions as follows
+    alpha = 0.0 for pure distance-driven (similar to nearest-colour)
+    alpha = 1.0 for pure weight-driven (similar to floyd_steinberg_weight_driven)
+    alpha = 0.5 for balanced combination (set as our default option)
+    
+    Note: unlike weighted-nearest, instead of linear norm, we use softmax to convert both to probability distributions before combining,
+    so technically combination should be more principled and less sensitive to outliers
+    """
+    
     # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
     buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
     
@@ -136,7 +148,7 @@ def floyd_steinberg_softmax(image: np.ndarray, palette: np.ndarray, weights: np.
     for y in range(height):
         for x in range(width):
             
-            # we compute the perceptual distances to all palette colours int the working colour space
+            # we compute the perceptual distances to all palette colours in the working colour space
             distances = cs.compute_distance(buffer[y, x], palette_ws, colour_space)
             
             # high weight = high score, lower distance = high score (negate distances)
@@ -145,11 +157,12 @@ def floyd_steinberg_softmax(image: np.ndarray, palette: np.ndarray, weights: np.
             distance_score = softmax(-distances)
             
             # combined score: our goal is to maximise this in order to find the best palette colour
+            # alpha controls the balance between distance-based and weight-based decisions as follows
             combined = (1 - alpha) * distance_score + alpha * weight_score
             chosen_idx = np.argmax(combined)
             chosen_colour_ws = palette_ws[chosen_idx]
             
-            # finally we compute the error and diffuse it as before
+            # we compute the error and diffuse it as before
             error = buffer[y, x] - chosen_colour_ws
             diffuse_fs(buffer, error, y, x, height, width)
             
@@ -158,8 +171,17 @@ def floyd_steinberg_softmax(image: np.ndarray, palette: np.ndarray, weights: np.
 
     return result
 
-
-def floyd_steinberg_error_scaled(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb') -> np.ndarray:
+# function for Floyd-Steinberg dithering on a coloured image with RGBXY mixing weights influencing error diffusion rather than colour assignment
+# HERE we are picking palette colour based on nearest neighbour, BUT the amount of error diffused to neighbours is controlled by the mixing weight of the chosen colour
+def floyd_steinberg_error_scaled(image: np.ndarray, palette: np.ndarray, weights: np.ndarray, colour_space: str = 'rgb', mode: str = 'scale', alpha: float = 0.5, p: float = 1.0) -> np.ndarray:
+    """
+    As a small note,  the weights influence how much quantisation error is propagated to neighbours based on the mode
+    
+    'scale': we multiply the error by (1-weight), so that high weight = confident assignment = less error diffused
+    'weighted_target': we choose the nearest colour to a weighted average of the buffer pixel and the RGBXY mixed colour, so that the error is still fully diffused but the choice of colour is influenced by weights, essentially without losing information
+    'confidence': we multiply error by (1-weight^p), where p>1 sharpens and p<1 softens the scalign effect. p=1 would be the equivalent of the 'scale' mode
+    """
+    
     # first we need to convert the image & palete to our workign colour space + initialise all the needed buffers
     buffer, palette_ws, result, height, width = init_buffers(image, palette, colour_space)
     
@@ -167,13 +189,43 @@ def floyd_steinberg_error_scaled(image: np.ndarray, palette: np.ndarray, weights
     for y in range(height):
         for x in range(width):
             
-            # we do the standard nearest-colour assignment in the working colour space
-            chosen_idx = find_nearest_colour(buffer[y, x], palette_ws, colour_space)
+            if mode == 'weighted_target':
+                # Alternative 3: finding the nearest colour to weighted average of buffer and mixing colour
+                # blend buffer value with RGBXY mixed colour as the assignment target
+                # full error is still diffused — no information lost
+                mixed_colour = np.sum(weights[y, x][:, None] * palette_ws, axis=0)
+                target = (1 - alpha) * buffer[y, x] + alpha * mixed_colour
+                chosen_idx = find_nearest_colour(target, palette_ws, colour_space)
+            else:
+                # all other modes use standard nearest-colour assignment
+                # we do the standard nearest-colour assignment in the working colour space
+                chosen_idx = find_nearest_colour(buffer[y, x], palette_ws, colour_space)
+            
             chosen_colour_ws = palette_ws[chosen_idx]
             
-            # scale error by (1 - weight): high weight = pixel strongly belongs to this colour (small error diffused), low weight = more of an uncertain assignment (more error diffused)
-            error = (buffer[y, x] - chosen_colour_ws) * (1 - weights[y, x, chosen_idx])
-
+            # now on to compute the base error
+            base_error = buffer[y, x] - chosen_colour_ws
+            
+            if mode == 'scale':
+                # scale error by (1 - weight): high weight = pixel strongly belongs to this colour (small error diffused), low weight = more of an uncertain assignment (more error diffused)
+                # Alternative 1: this one scales the error down --> also losing info
+                error = base_error * (1 - weights[y, x, chosen_idx])
+            
+            elif mode == 'weighted_target':
+                # Alternative 2: redistributing by weight
+                # instead of diffusing all the error in one direction, we split depending on how much each colour contributes
+                error = base_error 
+                
+            elif mode == 'confidence':
+                # Alternative 4: error scaling by confidence interval
+                # by raising the weight to a power p to make the scaling more aggressive for high-confidence pixels
+                # where p>sharpens (only very high-weight pixels diffuse little error), p<1softens scaling (even moderate-weight pixels diffuse little error)
+                confidence = weights[y, x, chosen_idx] ** p
+                error = base_error * (1 - confidence)
+                
+            else:
+                raise ValueError(f"Invalid mode: {mode}. Choose from 'scale', 'weighted_target', or 'confidence'.")
+            
             # diffuse and store (same in both functions)
             diffuse_fs(buffer, error, y, x, height, width)
             result[y, x] = cs.to_rgb(chosen_colour_ws, colour_space)

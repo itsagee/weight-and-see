@@ -2,6 +2,14 @@ import numpy as np
 from PIL import Image
 from . import colour_space_conversions as cs
 
+# === Other Helpers ===
+
+# TODO move the softmax here since it's universally used
+# # helper softmax function
+# def softmax(x):
+#     e = np.exp(x - x.max())
+#     return e / e.sum()
+
 # === Grayscale Helpers ===
 
 # helper function to turn an image into grayscale using standard luminance weights

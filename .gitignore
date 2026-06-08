@@ -1,0 +1,13 @@
+# Ignore misc folder
+misc/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# large weight files
+data/pigs-10-palette/pigs.jpg-weights.js
+data/pigs-4-palette/pigs.jpg-weights.js
+data/blue-graphic-tshirt/blue-graphic-tshirt.png-weights.js
+data/negroni/negroni.jpg-weights.js
+data/sunset/sunset.jpg-weights.js
