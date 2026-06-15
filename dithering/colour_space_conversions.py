@@ -73,6 +73,7 @@ def to_rgb(pixel: np.ndarray, colour_space: str) -> np.ndarray:
     else:
         raise ValueError(f"Unknown colour space: {colour_space}")
     
+# should i change to perceptual difference?
 def compute_distance(pixel: np.ndarray, palette: np.ndarray, colour_space: str) -> np.ndarray:
     
     if (colour_space == 'rgb') or (colour_space == 'cielab'):
@@ -81,12 +82,30 @@ def compute_distance(pixel: np.ndarray, palette: np.ndarray, colour_space: str) 
         return np.linalg.norm(palette - pixel, axis=1)
 
     elif colour_space == 'ciexyy':
+        # ALTERNATIVE 1
         # weight luminance and chromaticity separately
         # Y (luminance) is index 2, x and y are indices 0 and 1
         chroma_diff = np.linalg.norm(palette[:, :2] - pixel[:2], axis=1)
         luma_diff   = np.abs(palette[:, 2] - pixel[2])
+        
         # luminance contributes more to perceived difference
         return 2.0 * luma_diff + chroma_diff
+        
+        # # ALTERNATIVE 2
+        # # This first to ensure palette and pixel Y values are normalized between 0.0 and 1.0
+        # chroma_sq = np.sum((palette[:, :2] - pixel[:2]) ** 2, axis=1)
+        # luma_sq   = (palette[:, 2] - pixel[2]) ** 2
+
+        # # Weighting luminance heavier (e.g., factor of 2.0 on the variance scale)
+        # w_luma = 2.0
+        # w_chroma = 1.0
+
+        # return np.sqrt((w_chroma * chroma_sq) + (w_luma * luma_sq))
+        
+        # # ALT 3
+        # return np.linalg.norm(palette - pixel, axis=1)
+        
+
 
     else:
         raise ValueError(f"Unknown colour space: {colour_space}")

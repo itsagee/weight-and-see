@@ -81,6 +81,8 @@ def floyd_steinberg_weight_driven(image: np.ndarray, palette: np.ndarray, weight
             # first we pick the palette colour with the highest weight at this pixel
             chosen_idx = np.argmax(weights[y, x])
             chosen_colour_ws = palette_ws[chosen_idx]
+            
+            # CHECK HERE (i'm not using the buffer to check error)
                         
             # then compute the error between buffer (not original) and chosen colour
             error = buffer[y, x] - chosen_colour_ws
