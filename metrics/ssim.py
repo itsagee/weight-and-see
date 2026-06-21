@@ -1,5 +1,7 @@
 import numpy as np
+
 from skimage.metrics import structural_similarity as ssim
+from metrics.metrics_utils import to_float
 
 # SSIM (Structural Similarity Index), perceptual metric that quantifies image quality degradation caused by processing such as data compression or by losses in data transmission. It considers changes in structural information, luminance, and contrast between original-reconstructed
 # Formula: SSIM(x, y) = (2 * mu_x * mu_y + C1) * (2 * sigma_xy + C2) / ((mu_x^2 + mu_y^2 + C1) * (sigma_x^2 + sigma_y^2 + C2))
@@ -8,10 +10,8 @@ from skimage.metrics import structural_similarity as ssim
 # for now using the one from the skimage library
 def compute_ssim(original: np.ndarray, reconstruction: np.ndarray) -> float:
     
-    original = original.astype(np.float64)
-    reconstruction = reconstruction.astype(np.float64)
-    
-    max_val = 255.0 if original.max() > 1.0 else 1.0
-    
+    original = to_float(original)
+    reconstruction = to_float(reconstruction)
+        
     # channel_axis = 2 to compute SSIM per channel then average
-    return ssim(original, reconstruction, data_range=max_val, channel_axis=2)
+    return ssim(original, reconstruction, data_range=1.0, channel_axis=2)

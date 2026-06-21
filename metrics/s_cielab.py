@@ -3,6 +3,7 @@ import colour
 
 from scipy.ndimage import gaussian_filter
 from skimage import color
+from metrics.metrics_utils import to_float
 
 # --- setting up ---
 
@@ -83,15 +84,11 @@ def spatial_filter(opp: np.ndarray, pixels_per_degree: float) -> np.ndarray:
 # actual setup using Johnson & Fairchild (2003) Eq. 4: px/deg = ppi / ((180/pi) * arctan(1 / viewing_distance_inches))
 def compute_scielab(original: np.ndarray, reconstruction: np.ndarray, pixels_per_degree: float = 60.0) -> float:
     
-    original = original.astype(np.float64)
-    reconstruction = reconstruction.astype(np.float64)
-
-    if original.max() > 1.0:
-        original = original / 255.0
-        reconstruction = reconstruction / 255.0
+    original = to_float(original)
+    reconstruction = to_float(reconstruction)
     
     # step 1: from RGB TO XYZ
-    original_xyz       = color.rgb2xyz(original)
+    original_xyz = color.rgb2xyz(original)
     reconstruction_xyz = color.rgb2xyz(reconstruction)
     
     # step 2: xyz to the opponent channels (Eq. 1)
