@@ -11,3 +11,9 @@ data/pigs-4-palette/pigs.jpg-weights.js
 data/blue-graphic-tshirt/blue-graphic-tshirt.png-weights.js
 data/negroni/negroni.jpg-weights.js
 data/sunset/sunset.jpg-weights.js
+
+# model checkpoints downloaded at runtime
+models/
+*.pth
+*.pt
+*.ckpt
