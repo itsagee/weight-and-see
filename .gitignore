@@ -6,7 +6,7 @@ __pycache__/
 *.pyc
 
 # large weight files
-data/*-weights.js
+data/*/*-weights.js
 
 # outdated output files
 output/OLD
