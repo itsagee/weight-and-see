@@ -66,6 +66,7 @@ weight-and-see/
 │   └── [image-name]/
 │       ├── [image-name]-palette.js # Palette colour file
 │       └── [image-name]-weights.js # This is where per-pixel mixing weights should go, not included here because of size
+│
 ├── dithering/                   # Dithering algorithm implementations
 │   ├── floyd_steinberg.py       # Floyd-Steinberg implementation
 │   ├── jarvis_judice_ninke.py   # Jarvis-Judice-Ninke implementation
@@ -73,6 +74,7 @@ weight-and-see/
 │   ├── io.py                    # Loaders for palette, weights, and images (we need a parser for the files generated from RGBXY)
 │   ├── dithering_utils.py           # Helper functions for dithering
 │   └── colour_space_conversions.py  # Helper functions to switch between colour spaces
+│
 ├── metrics/             # Perceptual and quantitative metric implementations
 │   ├── psnr.py          # PSNR implementation
 │   ├── ssim.py          # SSIM implementation
@@ -80,11 +82,14 @@ weight-and-see/
 │   ├── s_cielab.py      # S-CIELAB implementation
 │   ├── lpips.py         # LPIPS implementation
 │   └── dreamsim.py      # DreamSim implementation
+│
 ├── models/       # Models for the metric models should go here
+│
 ├── runners/
 │   ├── dithering_runner.py    # used to identify and call the right dithering function as well as save the results
 │   ├── metrics_runner.py      # used to identify and call the right metric as well as to save the results
 │   └── dithering_viz.py       # includes all functionality for the visualization plots and figures
+│
 ├── output/                    # Generated results
 │   └── [image-name]
 │       ├── fs/         # directory including all the FS results for this image
@@ -96,6 +101,7 @@ weight-and-see/
 │       └── metrics/    # directory including all the metric results (plots and csv)
 │           ├── *.png                           # metric resulting plots & figures
 │           └── [image-name]-metrics_all.csv    # csv files for all metric results
+│
 ├── requirements.txt          # used to set up once before running the code
 ├── refactored-main.ipynb     # The most up-to-date code that can run the full pipeline or individual sections, clean and tidy.
 ├── app.py                    # The **main** code and its GUI, user-friendly.
