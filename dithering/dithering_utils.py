@@ -4,7 +4,7 @@ from . import colour_space_conversions as cs
 
 # === Other Helpers ===
 
-# TODO move the softmax here since it's universally used
+# TODO could move the softmax here since it's universally used
 # # helper softmax function
 # def softmax(x):
 #     e = np.exp(x - x.max())
